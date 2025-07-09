@@ -1,15 +1,12 @@
-from langchain.vectorstores import FAISS
-from langchain.chat_models import ChatOpenAI
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.chains import RetrievalQA
+from langchain_community.chat_models import AzureChatOpenAI
+import os
 
-def load_chatbot(index_path="faiss_index"):
-    vectorstore = FAISS.load_local(index_path, OpenAIEmbeddings())
-    llm = ChatOpenAI(model_name="gpt-3.5-turbo")
-    
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        retriever=vectorstore.as_retriever(),
-        return_source_documents=True
+def load_chatbot():
+    llm = AzureChatOpenAI(
+        model=os.getenv("AZURE_CHAT_DEPLOYMENT").strip(),
+        api_key=os.getenv("OPENAI_API_KEY"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),  # <-- use the correct env var
+        api_version=os.getenv("OPENAI_API_VERSION"),
+        temperature=0.7
     )
-    return qa_chain
+    return llm

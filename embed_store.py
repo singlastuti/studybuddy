@@ -1,12 +1,22 @@
+from langchain_openai import AzureOpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
 import os
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
+from dotenv import load_dotenv
 
-def embed_and_store(chunks, save_path="faiss_index"):
-    os.environ["OPENAI_API_KEY"] = "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"
+load_dotenv()
 
-    embeddings = OpenAIEmbeddings()
+def embed_and_store(chunks):
+    print("DEPLOYMENT:", os.getenv("AZURE_EMBEDDING_DEPLOYMENT"))
+    print("ENDPOINT:", os.getenv("AZURE_OPENAI_ENDPOINT"))
+    print("KEY:", os.getenv("OPENAI_API_KEY"))
+    print("VERSION:", os.getenv("OPENAI_API_VERSION"))
+    embeddings = AzureOpenAIEmbeddings(
+        model=os.getenv("AZURE_EMBEDDING_DEPLOYMENT").strip(),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT").strip(),
+        api_key=os.getenv("OPENAI_API_KEY").strip(),
+        api_version=os.getenv("OPENAI_API_VERSION").strip(),
+        chunk_size=1000
+    )
     vectorstore = FAISS.from_documents(chunks, embeddings)
-    vectorstore.save_local(save_path)
-
+    vectorstore.save_local("faiss_index")
     return vectorstore
