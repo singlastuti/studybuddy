@@ -7,6 +7,7 @@ from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain_openai import AzureOpenAIEmbeddings
+from utils import get_embeddings
 import os
 
 st.set_page_config(page_title="StudyBuddy AI", layout="wide")
@@ -29,13 +30,7 @@ if uploaded_file:
     st.success("Document processed successfully!")
 
     # Load vectorstore and create retriever
-    embeddings = AzureOpenAIEmbeddings(
-        model=os.getenv("AZURE_EMBEDDING_DEPLOYMENT").strip(),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT").strip(),
-        api_key=os.getenv("OPENAI_API_KEY").strip(),
-        api_version=os.getenv("OPENAI_API_VERSION").strip(),
-        chunk_size=1000
-    )
+    embeddings = get_embeddings()
     vectorstore = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
     retriever = vectorstore.as_retriever()
 
@@ -48,8 +43,10 @@ if uploaded_file:
         input_variables=["context", "question"],
         template=(
             "You are an AI assistant helping with questions about a document the user has uploaded. "
-            "The document is titled 'temp.pdf'. Use ONLY the following context to answer the question.\n\n"
+            "The document is titled 'temp.pdf'. You can use the following context to answer the question.\n\n"
             "Context:\n{context}\n\nQuestion: {question}\nAnswer:"
+            "Note that you should not use the name temp.pdf in your response, it is just a storage name for the uploaded document."
+            "Be friendly and concise in your responses, but also thorough. "
         )
     )
 
@@ -60,7 +57,31 @@ if uploaded_file:
         chain_type_kwargs={"prompt": custom_prompt}
     )
 
-    user_input = st.text_input("Ask me something about the document:")
+        # --- Chat-like interface ---
+        # --- Chat-like interface ---
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Display chat history
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # User input box at the bottom
+    user_input = st.chat_input("Ask me something about the document:")
+
     if user_input:
+        # Add user message to history and display it immediately
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.chat_message("user"):
+            st.markdown(user_input)
+
+        # Get answer from the chain
         result = qa_chain.invoke({"query": user_input})
-        st.write(result["result"])
+        answer = result["result"]
+
+        # Add assistant message to history and display it immediately
+        st.session_state.messages.append({"role": "assistant", "content": answer})
+        with st.chat_message("assistant"):
+            st.markdown(answer)
+        st.stop()  # Prevents duplicate display on rerun
