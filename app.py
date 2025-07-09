@@ -19,7 +19,11 @@ if uploaded_file:
         f.write(uploaded_file.read())
 
     st.info("Parsing and embedding document...")
+
     chunks = load_and_split_pdf("temp.pdf")
+    if not chunks:
+        st.error("No text could be extracted from the uploaded PDF. Please upload a different file.")
+        st.stop()
     embed_and_store(chunks)
 
     st.success("Document processed successfully!")
