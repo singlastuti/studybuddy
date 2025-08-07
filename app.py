@@ -8,6 +8,9 @@ from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain_openai import AzureOpenAIEmbeddings
 from utils import get_embeddings
+from summarizer import summarizer_ui
+from quiz_generator import quiz_generator_ui
+from bullet_points import bullet_points_ui
 import os
 
 st.set_page_config(page_title="StudyBuddy AI", layout="wide")
@@ -29,6 +32,8 @@ if uploaded_file:
 
     st.success("Document processed successfully!")
 
+    
+
     # Load vectorstore and create retriever
     embeddings = get_embeddings()
     vectorstore = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
@@ -37,6 +42,9 @@ if uploaded_file:
     # Load LLM
     llm = load_chatbot()
 
+    summarizer_ui(llm, retriever)
+    quiz_generator_ui(llm, retriever)
+    bullet_points_ui(llm, retriever)
 
     # Custom prompt template to give context about the uploaded document
     custom_prompt = PromptTemplate(
