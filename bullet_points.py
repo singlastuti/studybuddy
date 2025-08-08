@@ -1,25 +1,31 @@
 import streamlit as st
 
+def _extract_text(result):
+    return getattr(result, "content", getattr(result, "text", str(result)))
+
 def bullet_points_ui(llm, retriever):
     with st.expander("📋 Break Document into Bullet Points"):
         if st.button("Generate Bullet Points"):
-            all_text = " ".join([doc.page_content for doc in retriever.vectorstore.docstore._dict.values()])
-            prompt = (
-                "Break down the following document into detailed, well-organized bullet points. "
-                "Cover all key ideas, facts, and sections so that someone can understand the entire document just by reading these points.\n\n"
-                "Make the bullet points as detailed as possible, they should be comprehensive and cover all aspects"
-                "Consider an example: of a chapter from a maths textbook for a real numbers chapter, you should not only mention the theorem that states root 2 is irrational , but also its explanation and the entire proof."
-                f"Document:\n{all_text}\n\nBullet Points:"
-            )
-            result = llm.invoke(prompt)
-            # Extract only the content if needed
-            if isinstance(result, dict) and "content" in result:
-                bullet_text = result["content"]
-            elif hasattr(result, "content"):
-                bullet_text = result.content
-            elif hasattr(result, "text"):
-                bullet_text = result.text
-            else:
-                bullet_text = str(result)
-            # Display as markdown for nice formatting
-            st.markdown(bullet_text)
+            with st.spinner("Generating bullet points…"):
+                chunks = st.session_state.get("chunks", [])
+                if not chunks:
+                    docs = retriever.vectorstore.similarity_search("outline", k=20)
+                    chunks = docs
+
+                # Summarize each chunk into bullet points, then merge
+                partial_bullets = []
+                for d in chunks[:15]:  # limit to first 15 chunks to control token use
+                    part_prompt = (
+                        "From this excerpt, extract structured bullet points covering all key ideas.\n\n"
+                        f"Excerpt:\n{d.page_content}\n\nBullet Points (bulleted list):"
+                    )
+                    partial_bullets.append(_extract_text(llm.invoke(part_prompt)))
+
+                combined = "\n".join(partial_bullets)
+                merge_prompt = (
+                    "Merge and deduplicate the bullet points below into a coherent, well-organized outline. "
+                    "Group related bullets under appropriate subheadings if helpful. Use only the provided content.\n\n"
+                    f"Bullets to merge:\n{combined}\n\nFinal Bullet Outline:"
+                )
+                bullet_text = _extract_text(llm.invoke(merge_prompt))
+                st.markdown(bullet_text)
