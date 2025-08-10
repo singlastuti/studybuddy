@@ -4,8 +4,6 @@ from load_pdf import load_and_split_pdf
 from embed_store import embed_and_store
 from chatbot import load_chatbot
 from langchain_community.vectorstores import FAISS
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
 from utils import get_embeddings
 from summarizer import summarizer_ui
 from quiz_generator import quiz_generator_ui
@@ -14,6 +12,10 @@ from dotenv import load_dotenv
 import os
 import hashlib
 from pathlib import Path
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 
 load_dotenv()
 
@@ -73,23 +75,32 @@ if uploaded_file:
     quiz_generator_ui(llm, retriever)
     bullet_points_ui(llm, retriever)
 
-    # Custom prompt template to give context about the uploaded document
-    custom_prompt = PromptTemplate(
-        input_variables=["context", "question"],
-        template=(
-            "You are an AI assistant helping with questions about a document the user has uploaded.\n"
-            "Use ONLY the provided context from the document. If the context is insufficient, say you don't know.\n\n"
-            "Context:\n{context}\n\nQuestion: {question}\nAnswer:\n"
-            "Note: Do not mention the file name (temp.pdf) in your response. Be friendly, concise, and accurate."
-        ),
-    )
-
-    qa_chain = RetrievalQA.from_chain_type(
+    # Build history-aware retriever (rewrites follow-up questions using chat history)
+    rephrase_prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are a helpful assistant that rewrites the user's latest question into a standalone query using the conversation history. Keep it concise and specific."),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{input}"),
+    ])
+    history_aware_retriever = create_history_aware_retriever(
         llm=llm,
         retriever=retriever,
-        return_source_documents=False,
-        chain_type_kwargs={"prompt": custom_prompt, "document_variable_name": "context"},
+        prompt=rephrase_prompt,
     )
+
+    # Answering chain that sees both context chunks and chat history
+    answer_prompt = ChatPromptTemplate.from_messages([
+        ("system", (
+            "You are an AI assistant helping with questions about a document the user has uploaded.\n"
+            "Use ONLY the provided context from the document. If the context is insufficient, say you don't know.\n"
+            "Do not mention the file name. Be friendly, concise, and accurate."
+        )),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "Question: {input}"),
+        ("system", "Context to use for answering:\n{context}"),
+    ])
+    question_answer_chain = create_stuff_documents_chain(llm, answer_prompt)
+
+    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
 
     # --- Chat-like interface ---
     if "messages" not in st.session_state:
@@ -109,9 +120,17 @@ if uploaded_file:
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        # Get answer from the chain
-        result = qa_chain.invoke({"query": user_input})
-        answer = result["result"]
+        # Convert chat history to LangChain Message objects (excluding the last user message)
+        chat_history = []
+        for m in st.session_state.messages[:-1]:
+            if m["role"] == "user":
+                chat_history.append(HumanMessage(content=m["content"]))
+            elif m["role"] == "assistant":
+                chat_history.append(AIMessage(content=m["content"]))
+
+        # Get answer from the history-aware RAG chain
+        result = rag_chain.invoke({"input": user_input, "chat_history": chat_history})
+        answer = result.get("answer", "I couldn't produce an answer.")
 
         # Add assistant message to history and display it immediately
         st.session_state.messages.append({"role": "assistant", "content": answer})
