@@ -8,6 +8,7 @@ from utils import get_embeddings
 from summarizer import summarizer_ui
 from quiz_generator import quiz_generator_ui
 from bullet_points import bullet_points_ui
+from knowledge_graph import knowledge_graph_ui
 from dotenv import load_dotenv
 import os
 import hashlib
@@ -43,7 +44,7 @@ st.caption("Upload a PDF to chat, summarize, generate quizzes, and extract bulle
 
 with st.sidebar:
     st.header("Setup")
-    uploaded_file = st.file_uploader("Upload PDF", type="pdf")
+    uploaded_files = st.file_uploader("Upload PDF(s)", type="pdf", accept_multiple_files=True)
     st.divider()
     with st.expander("Advanced: Retrieval Settings", expanded=False):
         k = st.slider("Top-K Chunks", 2, 10, 6)
@@ -54,52 +55,59 @@ with st.sidebar:
     st.subheader("About")
     st.caption("StudyBuddy helps you chat with your PDFs using Azure OpenAI and FAISS. All answers are grounded to the uploaded document.")
 
-if uploaded_file:
-    # Persist the upload to a temp file
-    with open("temp.pdf", "wb") as f:
-        file_bytes_uploaded = uploaded_file.read()
-        f.write(file_bytes_uploaded)
+if uploaded_files:
+    all_chunks = []
+    per_file_counts = []
+    has_any_text = False
+    sha = hashlib.sha256()
 
-    # Compute a stable hash to cache embeddings/index per unique file
-    with open("temp.pdf", "rb") as f:
-        file_bytes = f.read()
-    file_hash = hashlib.sha256(file_bytes).hexdigest()[:16]
-    index_dir = Path("faiss_index") / file_hash
-    # Persist file meta for later actions
-    st.session_state["file_hash"] = file_hash
-    st.session_state["index_dir"] = str(index_dir)
-    st.session_state["file_name"] = getattr(uploaded_file, "name", "document.pdf")
-    st.session_state["file_bytes"] = file_bytes
-
-    st.info("Parsing and indexing document…")
+    st.info("Parsing and indexing document(s)…")
     with st.spinner("Extracting text and building/using vector index…"):
-        # Parse
-        chunks = load_and_split_pdf("temp.pdf")
-        if not chunks:
-            st.error("No text could be extracted from the uploaded PDF. Please upload a different file.")
+        for uploaded_file in uploaded_files:
+            # Persist temp
+            with open("temp.pdf", "wb") as f:
+                b = uploaded_file.read()
+                f.write(b)
+            sha.update(b)
+            # Parse
+            chunks = load_and_split_pdf("temp.pdf")
+            if chunks:
+                has_any_text = True
+                # Tag source metadata
+                for d in chunks:
+                    d.metadata = getattr(d, "metadata", {}) or {}
+                    d.metadata["source"] = getattr(uploaded_file, "name", "document.pdf")
+                all_chunks.extend(chunks)
+                per_file_counts.append((getattr(uploaded_file, "name", "document.pdf"), len(chunks)))
+            else:
+                per_file_counts.append((getattr(uploaded_file, "name", "document.pdf"), 0))
+            # Cleanup temp
+            try:
+                os.remove("temp.pdf")
+            except Exception:
+                pass
+
+        if not has_any_text:
+            st.error("No text could be extracted from the uploaded PDFs. Please upload different files.")
             st.stop()
+
         # Keep chunks in session for feature modules
-        st.session_state["chunks"] = chunks
+        st.session_state["chunks"] = all_chunks
 
-        # Prepare embeddings
+        # Combined index path based on all files' bytes
+        file_hash = sha.hexdigest()[:16]
+        index_dir = Path("faiss_index") / file_hash
+        st.session_state["file_hash"] = file_hash
+        st.session_state["index_dir"] = str(index_dir)
+
         embeddings = get_embeddings()
-
-        # Build or load FAISS index for this file hash
         if (index_dir / "index.faiss").exists() and (index_dir / "index.pkl").exists():
-            # Local-only trusted index; allow_dangerous_deserialization is safe here
             vectorstore = FAISS.load_local(str(index_dir), embeddings, allow_dangerous_deserialization=True)
         else:
-            # Ensure parent dir exists
             index_dir.parent.mkdir(parents=True, exist_ok=True)
-            vectorstore = embed_and_store(chunks, save_path=str(index_dir))
+            vectorstore = embed_and_store(all_chunks, save_path=str(index_dir))
 
-        # Cleanup temporary file
-        try:
-            os.remove("temp.pdf")
-        except Exception:
-            pass
-
-    st.success("Document processed successfully!")
+    st.success("Documents processed successfully!")
 
     # Create retriever (MMR for diversity)
     retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": k, "fetch_k": fetch_k})
@@ -110,34 +118,26 @@ if uploaded_file:
     # Sidebar document info
     with st.sidebar:
         st.subheader("Document Info")
-        st.caption(f"File: {st.session_state.get('file_name', 'document.pdf')}")
         st.caption(f"Index: {file_hash}")
-        chunk_count = len(st.session_state.get("chunks", []))
-        st.caption(f"Chunks: {chunk_count}")
+        total_chunks = len(st.session_state.get("chunks", []))
+        st.caption(f"Total Chunks: {total_chunks}")
+        for fname, cnt in per_file_counts:
+            st.caption(f"{fname}: {cnt} chunks")
         # Actions
         if st.button("Clear Chat", use_container_width=True):
             st.session_state["messages"] = []
-            try:
-                st.rerun()
-            except Exception:
-                st.experimental_rerun()
-        if st.button("Re-index Document", use_container_width=True):
-            # Force rebuild the FAISS index for this file
-            try:
-                # Write temp again from stored bytes
-                with open("temp.pdf", "wb") as f:
-                    f.write(st.session_state.get("file_bytes", b""))
-                # Re-parse
-                chunks = load_and_split_pdf("temp.pdf")
-                st.session_state["chunks"] = chunks
-                embeddings = get_embeddings()
-                Path(st.session_state["index_dir"]).mkdir(parents=True, exist_ok=True)
-                _ = embed_and_store(chunks, save_path=st.session_state["index_dir"])
-                st.success("Re-indexed successfully.")
-            except Exception as e:
-                st.error(f"Failed to re-index: {e}")
+            st.rerun()
+    if st.button("Re-index Documents", use_container_width=True):
+        # Force rebuild the FAISS index for these document(s)
+        try:
+            embeddings = get_embeddings()
+            Path(st.session_state["index_dir"]).mkdir(parents=True, exist_ok=True)
+            _ = embed_and_store(st.session_state.get("chunks", []), save_path=st.session_state["index_dir"])
+            st.success("Re-indexed successfully.")
+        except Exception as e:
+            st.error(f"Failed to re-index: {e}")
 
-    tabs = st.tabs(["💬 Chat", "🧾 Summarize", "📝 Quiz", "📋 Bullet Points"])
+    tabs = st.tabs(["💬 Chat", "🧾 Summarize", "📝 Quiz", "📋 Bullet Points", "🕸️ Knowledge Graph"])
     with tabs[0]:
         pass  # Chat rendered below
     with tabs[1]:
@@ -146,6 +146,8 @@ if uploaded_file:
         quiz_generator_ui(llm, retriever)
     with tabs[3]:
         bullet_points_ui(llm, retriever)
+    with tabs[4]:
+        knowledge_graph_ui(llm, retriever)
 
     # Build history-aware retriever (rewrites follow-up questions using chat history)
     rephrase_prompt = ChatPromptTemplate.from_messages([
@@ -206,13 +208,17 @@ if uploaded_file:
                     chat_history.append(AIMessage(content=m["content"]))
 
             # Get answer from the history-aware RAG chain
+            import time
+            t0 = time.perf_counter()
             result = rag_chain.invoke({"input": user_input, "chat_history": chat_history})
+            elapsed_ms = int((time.perf_counter() - t0) * 1000)
             answer = result.get("answer", "I couldn't produce an answer.")
 
             # Add assistant message to history and display it immediately
             st.session_state.messages.append({"role": "assistant", "content": answer})
             with st.chat_message("assistant", avatar="🤖"):
                 st.markdown(answer)
+                st.caption(f"Response time: {elapsed_ms} ms")
 
                 # Optional: show retrieved context for debugging/education
                 if 'show_context_debug' in locals() and show_context_debug:
@@ -220,7 +226,9 @@ if uploaded_file:
                     if ctx:
                         with st.expander("Show retrieved context"):
                             for i, d in enumerate(ctx, 1):
+                                source = getattr(getattr(d, 'metadata', {}), 'get', lambda k, default=None: None)("source") if hasattr(d, 'metadata') else None
                                 content = getattr(d, 'page_content', str(d))
                                 snippet = (content[:600] + '…') if len(content) > 600 else content
-                                st.markdown(f"**Context {i}:**\n\n{snippet}")
+                                header = f"**Context {i}{' — ' + source if source else ''}:**"
+                                st.markdown(f"{header}\n\n{snippet}")
             st.stop()  # Prevents duplicate display on rerun

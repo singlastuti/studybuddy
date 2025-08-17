@@ -9,7 +9,10 @@ def bullet_points_ui(llm, retriever):
             with st.spinner("Generating bullet points…"):
                 chunks = st.session_state.get("chunks", [])
                 if not chunks:
-                    docs = retriever.vectorstore.similarity_search("outline", k=20)
+                    try:
+                        docs = retriever.get_relevant_documents("outline")
+                    except Exception:
+                        docs = []
                     chunks = docs
 
                 # Summarize each chunk into bullet points, then merge

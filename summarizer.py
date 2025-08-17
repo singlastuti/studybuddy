@@ -26,7 +26,10 @@ def summarizer_ui(llm, retriever):
                 chunks = st.session_state.get("chunks", [])
                 if not chunks:
                     # As a fallback, retrieve a broad set and deduplicate
-                    docs = retriever.vectorstore.similarity_search("overview", k=20)
+                    try:
+                        docs = retriever.get_relevant_documents("overview")
+                    except Exception:
+                        docs = []
                     chunks = docs
 
                 # Limit the number of chunks to control token usage

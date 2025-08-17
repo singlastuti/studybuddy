@@ -12,24 +12,27 @@ def quiz_generator_ui(llm, retriever):
             with st.spinner("Generating quiz…"):
                 chunks = st.session_state.get("chunks", [])
                 if not chunks:
-                    docs = retriever.vectorstore.similarity_search("key concepts", k=15)
+                    try:
+                        docs = retriever.get_relevant_documents("key concepts")
+                    except Exception:
+                        docs = []
                     chunks = docs
 
-            # Build a compact content basis by sampling up to ~10 chunks
+                # Build a compact content basis by sampling up to ~10 chunks
                 sample = chunks[:10]
                 basis = "\n\n".join(d.page_content for d in sample)
 
                 quiz_instruction = (
-                f"Using only the document content below, generate {num_questions} fill-in-the-blank questions. "
-                "Provide the answers immediately after each question in the format 'Answer: ...'. "
-                "Ensure questions span different parts of the content and avoid trivial blanks."
-            )
+                    f"Using only the document content below, generate {num_questions} fill-in-the-blank questions. "
+                    "Provide the answers immediately after each question in the format 'Answer: ...'. "
+                    "Ensure questions span different parts of the content and avoid trivial blanks."
+                )
                 quiz_prompt = (
-                f"{quiz_instruction}\n\nDocument Content:\n{basis}\n\nQuiz:"
-            )
+                    f"{quiz_instruction}\n\nDocument Content:\n{basis}\n\nQuiz:"
+                )
                 quiz_text = _extract_text(llm.invoke(quiz_prompt))
 
-            # Show questions with collapsible answers
+                # Show questions with collapsible answers
                 qa_pairs = re.split(r"\n(?=\d+\.)", quiz_text.strip())
                 for pair in qa_pairs:
                     lines = [ln for ln in pair.strip().split("\n") if ln]
