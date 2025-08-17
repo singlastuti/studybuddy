@@ -1,0 +1,163 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 550px;
+                 background-color: #0B1020;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#97c2fc", "id": "ambulance crew members", "label": "ambulance crew members", "shape": "dot"}, {"color": "#97c2fc", "id": "Pub. 559, Survivors, Executors, and Administrators", "label": "Pub. 559, Survivors, Executors, and Administrators", "shape": "dot"}, {"color": "#97c2fc", "id": "partnership", "label": "partnership", "shape": "dot"}, {"color": "#97c2fc", "id": "taxable entity", "label": "taxable entity", "shape": "dot"}, {"color": "#97c2fc", "id": "income", "label": "income", "shape": "dot"}, {"color": "#97c2fc", "id": "partners", "label": "partners", "shape": "dot"}, {"color": "#97c2fc", "id": "information return on Form 1065", "label": "information return on Form 1065", "shape": "dot"}, {"color": "#97c2fc", "id": "Schedule K-1 (Form 1065) to each partner", "label": "Schedule K-1 (Form 1065) to each partner", "shape": "dot"}, {"color": "#97c2fc", "id": "Partner\u0027s Instructions for Schedule K-1 (Form 1065) to each partner", "label": "Partner\u0027s Instructions for Schedule K-1 (Form 1065) to each partner", "shape": "dot"}, {"color": "#97c2fc", "id": "NIL", "label": "NIL", "shape": "dot"}, {"color": "#97c2fc", "id": "means through which student-athletes are allowed to receive financial compensation", "label": "means through which student-athletes are allowed to receive financial compensation", "shape": "dot"}, {"color": "#97c2fc", "id": "use of a student-athlete\u0027s name, image, or likeness for commercial purposes", "label": "use of a student-athlete\u0027s name, image, or likeness for commercial purposes", "shape": "dot"}, {"color": "#97c2fc", "id": "royalty income", "label": "royalty income", "shape": "dot"}, {"color": "#97c2fc", "id": "when natural resources are extracted from property", "label": "when natural resources are extracted from property", "shape": "dot"}, {"color": "#97c2fc", "id": "royalties", "label": "royalties", "shape": "dot"}, {"color": "#97c2fc", "id": "units such as barrels, tons, etc.", "label": "units such as barrels, tons, etc.", "shape": "dot"}, {"color": "#97c2fc", "id": "depletion", "label": "depletion", "shape": "dot"}, {"color": "#97c2fc", "id": "recovery of investment through depletion allowance", "label": "recovery of investment through depletion allowance", "shape": "dot"}, {"color": "#97c2fc", "id": "relationships", "label": "relationships", "shape": "dot"}, {"color": "#97c2fc", "id": "aren\u0027t ended by death or divorce", "label": "aren\u0027t ended by death or divorce", "shape": "dot"}, {"color": "#97c2fc", "id": "foster child", "label": "foster child", "shape": "dot"}, {"color": "#97c2fc", "id": "you by an authorized placement", "label": "you by an authorized placement", "shape": "dot"}, {"color": "#97c2fc", "id": "union benefits and dues", "label": "union benefits and dues", "shape": "dot"}, {"color": "#97c2fc", "id": "pay for union dues, assessments, contributions, or other payments", "label": "pay for union dues, assessments, contributions, or other payments", "shape": "dot"}, {"color": "#97c2fc", "id": "strike and lockout benefits", "label": "strike and lockout benefits", "shape": "dot"}, {"color": "#97c2fc", "id": "income as compensation", "label": "income as compensation", "shape": "dot"}, {"color": "#97c2fc", "id": "utility rebates", "label": "utility rebates", "shape": "dot"}, {"color": "#97c2fc", "id": "monthly electric bill", "label": "monthly electric bill", "shape": "dot"}]);
+                  edges = new vis.DataSet([{"from": "ambulance crew members", "label": "see", "to": "Pub. 559, Survivors, Executors, and Administrators"}, {"from": "partnership", "label": "isn\u0027t", "to": "taxable entity"}, {"from": "partnership", "label": "file", "to": "information return on Form 1065"}, {"from": "partnership", "label": "send", "to": "Schedule K-1 (Form 1065) to each partner"}, {"from": "partnership", "label": "send", "to": "Partner\u0027s Instructions for Schedule K-1 (Form 1065) to each partner"}, {"from": "income", "label": "passed through to", "to": "partners"}, {"from": "NIL", "label": "describes", "to": "means through which student-athletes are allowed to receive financial compensation"}, {"from": "NIL", "label": "refers to", "to": "use of a student-athlete\u0027s name, image, or likeness for commercial purposes"}, {"from": "royalty income", "label": "received", "to": "when natural resources are extracted from property"}, {"from": "royalties", "label": "based on", "to": "units such as barrels, tons, etc."}, {"from": "depletion", "label": "allows", "to": "recovery of investment through depletion allowance"}, {"from": "relationships", "label": "established by marriage", "to": "aren\u0027t ended by death or divorce"}, {"from": "foster child", "label": "placed with", "to": "you by an authorized placement"}, {"from": "union benefits and dues", "label": "deducted from", "to": "pay for union dues, assessments, contributions, or other payments"}, {"from": "strike and lockout benefits", "label": "usually included in", "to": "income as compensation"}, {"from": "utility rebates", "label": "receive on", "to": "monthly electric bill"}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {
+    "configure": {
+        "enabled": false
+    },
+    "edges": {
+        "color": {
+            "inherit": true
+        },
+        "smooth": {
+            "enabled": true,
+            "type": "dynamic"
+        }
+    },
+    "interaction": {
+        "dragNodes": true,
+        "hideEdgesOnDrag": false,
+        "hideNodesOnDrag": false
+    },
+    "physics": {
+        "barnesHut": {
+            "avoidOverlap": 0,
+            "centralGravity": 0.3,
+            "damping": 0.09,
+            "gravitationalConstant": -80000,
+            "springConstant": 0.001,
+            "springLength": 250
+        },
+        "enabled": true,
+        "stabilization": {
+            "enabled": true,
+            "fit": true,
+            "iterations": 1000,
+            "onlyDynamicEdges": false,
+            "updateInterval": 50
+        }
+    }
+};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>
